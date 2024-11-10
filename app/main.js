@@ -10,15 +10,10 @@ switch (command) {
     case "init":
     createGitDirectory();
     break;
-    case 'cat-file':
-    const hash = process.argv[4];
-    catFile(hash);
-    break;
-    case 'hash-object':
-    const writeFlag = process.argv[3] === "-w";
-    const filePath = process.argv[4];
-    hashObject(filePath, writeFlag);
-    break;
+    case 'ls-tree':
+        const treeHash = process.argv[3];
+        lsTree(treeHash);
+        break;
   default:
     throw new Error(`Unknown command ${command}`);
 }
@@ -32,37 +27,37 @@ function createGitDirectory() {
   console.log("Initialized git directory");
 }
 
- function catFile(hash) {
-  const content = fs.readFileSync(path.join(process.cwd(), ".git", "objects", hash.slice(0, 2), hash.slice(2),),);
-  const unzipped = zlib.inflateSync(content);
-  const res = unzipped.toString().split('\0')[1];
-  process.stdout.write(res);
-}
+function lsTree(treeHash) {
+    const treeFilePath = path.join(process.cwd(), ".git", "objects", treeHash.slice(0,2), treeHash.slice(2));
+    const content = fs.readFileSync(treeFilePath);
 
-function hashObject(filePath, writeFlag) {
-  // Step 1: Read the file content
-  const fileContent = fs.readFileSync(filePath);
+    // Decompress the content of the tree object
+    const unzipped = zlib.inflateSync(content);
+    const data = unzipped.toString();
 
-  // Step 2: Prepare the "blob" header
-  const header = `blob ${fileContent.length}\0`;
-  const fullContent = Buffer.concat([Buffer.from(header), fileContent]);
+    // Split the data into the header and the entries
+    const [header, ...entries] = data.split('\0');
 
-  // Step 3: Compute the SHA-1 hash
-  const hash = crypto.createHash("sha1").update(fullContent).digest("hex");
+    // Extract the size from the header (tree <size>\0)
+    const headerParts = header.split(' ');
+    if (headerParts[0] !== 'tree') {
+        throw new Error(`Invalid tree object header: ${header}`)
+    }
 
-  // Step 4: Optionally write to the .git/objects directory
-  if(writeFlag) {
-    const compressedContent = zlib.deflateSync(fullContent);
-    const dir = path.join(process.cwd(), ".git", "objects", hash.slice(0,2));
-    const file = path.join(dir, hash.slice(2));
+    // Parse the entries into an array of file/directory names
+    const fileNames = entries.map(entry => {
+        const entryParts = entry.split(' ');
+        const mode = entryParts[0];
+        const name = entryParts[1];
+        const sha = entryParts[2];
+        return { mode, name, sha }
+    });
 
-    // Create the directory if it doesn't exist
-    fs.mkdirSync(dir, { recursive: true });
+    // Sort entries alphabetically by name
+    const sortedEntries = fileNames.sort((a, b) => a.name.localeCompare(b.name));
 
-    // Write the compressed content to the file
-    fs.writeFileSync(file, compressedContent);
-  }
-
-  // Step 5: Output the hash
-  console.log(hash);
+    // Print the file/directory names as per --name-only flag
+    sortedEntries.forEach(entry => {
+        console.log(entry.name);
+    });
 }
