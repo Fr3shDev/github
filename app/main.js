@@ -23,6 +23,9 @@ switch (command) {
         const treeHash = process.argv[3];
         lsTree(treeHash);
         break;
+    case 'write-tree':
+        writeTree()
+        break;
   default:
     throw new Error(`Unknown command ${command}`);
 }
@@ -104,4 +107,59 @@ function lsTree(treeHash) {
     sortedEntries.forEach(entry => {
         console.log(entry.name);
     });
+}
+
+function writeTree(dir = process.cwd()) {
+    const entries = [];
+
+    const items = fs.readdirSync(dir, { withFileTypes: true });
+    items.forEach((item) => {
+        if (item.name === ".git") return;
+
+        const itemPath = path.join(dir, item.name);
+        let sha;
+        let mode;
+
+        if (item.isFile()) {
+            const content = fs.readFileSync(itemPath);
+            sha = writeObject("blob", content);
+            mode = "100644"; // Regular file
+        } else if (item.isDirectory()) {
+            sha = writeTree(itemPath);
+            mode = "040000"; // Directory
+        }
+
+        entries.push(`${mode} ${item.name}\0${Buffer.from(sha, "hex")}`);
+    });
+
+    entries.sort((a, b) => {
+        const nameA = a.split("\0")[0].split(" ")[1];
+        const nameB = b.split("\0")[0].split(" ")[1];
+    });
+
+    const treeContent = Buffer.concat([
+        Buffer.from(`tree ${entries.length}\0`), ...entries.map((entry) => Buffer.from(entry)),
+    ]);
+
+    return writeObject("tree", treeContent);
+}
+
+function writeObject(type, content) {
+    const header = `${type} ${content.length}\0`;
+    const store = Buffer.concat([Buffer.from(header), content]);
+
+    const sha = crypto.createHash("sha1").update(store).digest("hex");
+    const objectPath = path.join(process.cwd(), ".git", "objects", sha.slice(0,2), sha.slice(2));
+
+    if (!fs.existsSync(path.dirname(objectPath))) {
+        fs.mkdirSync(path.dirname(objectPath), { recursive: true });
+    }
+
+    if (!fs.existsSync(objectPath)) {
+        const compressed = zlib.deflateSync(store);
+        fs.writeFileSync(objectPath, compressed);
+    }
+
+    console.log(sha);
+    return sha;
 }
