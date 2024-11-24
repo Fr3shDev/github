@@ -1,5 +1,7 @@
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
+const crypto = require("crypto"); 
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 console.error("Logs from your program will appear here!");
