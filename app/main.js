@@ -2,6 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 const crypto = require("crypto"); 
+const https = require("https");
+const { URL } = require('url')
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 console.error("Logs from your program will appear here!");
@@ -33,6 +35,11 @@ switch (command) {
         const parentSHA = process.argv[5] === '-p' ? process.argv[6] : null;
         const message = process.argv[process.argv.indexOf("-m") + 1];
         commitTree(treeSHA, parentSHA, message)
+    case 'clone':
+        const repoURL = process.argv[3];
+        const targetDir = process.argv[4];
+        cloneRepo(repoURL, targetDir);
+        break
   default:
     throw new Error(`Unknown command ${command}`);
 }
@@ -191,4 +198,57 @@ function commitTree(treeSHA, parentSHA, message) {
     const commitSHA = writeObject("commit", commitContent);
 
     console.log(commitSHA);
+}
+
+function cloneRepo(url, dir) {
+    const repoName = url.split('/').pop();
+    const cloneDir = path.join(process.cwd(), dir);
+
+    // Create the .git directory structure
+    fs.mkdirSync(path.join(cloneDir, '.git', 'objects'), { recursive: true });
+    fs.mkdirSync(path.join(cloneDir, '.git', 'refs', 'heads'), { recursive: true });
+    fs.writeFileSync(parth.join(cloneDir, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+
+    // Fetch the repository packfile and refs
+    fetchPackfile(url, cloneDir);
+}
+
+// Fetch the repository packfile and refs
+function fetchPackfile(url, cloneDir) {
+    // Construct the URL for the packfile using GitHub's smart HTTP protocol
+    const gitURL = new URL(url);
+    const repoPath = `${gitURL.hostname}${gitURL.pathname}`;
+    const packfileUrl = `https:://${repoPath}/info/refs?service=git-upload-pack`;
+
+    https.get(packfileUrl, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+            // Parse the response and extract packfile info
+            // For simplicity, assume we're dealing with Git's packfile format here
+            const packfileData = parsePackfile(body);
+
+            // Save the packfile
+            savePackfile(cloneDir, packfileData);
+        });
+    });
+}
+
+// Parse the packfile response from GitHub
+function parsePackfile(data) {
+    // Git's packfile format parsing goes here
+    // we are focusing on unpacking the necessary Git objects (trees, commits, blobs)
+    return data;
+}
+
+// Save the unpacked objects from the packfile
+function savePackfile(cloneDir, packfileData) {
+    // Extract objecst and store them in the local .git/objects directory
+    // Handle saving objects (commits, trees, blobs)
+    const objectDir = path.join(cloneDir, '.git', 'objects');
+    fs.writeFileSync(path.join(objectDir, 'your-object-hash'), packfileData);
+
+    // Optionally, you can also manage the refs and HEAD to set the default branch 
+    const headRef = path.join(cloneDir, '.git', 'refs', 'heads', 'main');
+    fs.writeFileSync(headRef, 'your-ref-data-here');
 }
