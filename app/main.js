@@ -26,6 +26,11 @@ switch (command) {
     case 'write-tree':
         writeTree()
         break;
+    case 'commit':
+        const treeSHA = process.argv[3];
+        const parentSHA = process.argv[5] === '-p' ? process.argv[6] : null;
+        const message = process.argv[process.argv.indexOf("-m") + 1];
+        commitTree(treeSHA, parentSHA, message)
   default:
     throw new Error(`Unknown command ${command}`);
 }
@@ -162,4 +167,26 @@ function writeObject(type, content) {
 
     console.log(sha);
     return sha;
+}
+
+function commitTree(treeSHA, parentSHA, message) {
+    const authorName = "John Doe" // Hardcoded author
+    const authorEmail = "john.doe@example.com"; // Hardcoded email
+    const committerName = "John Doe"; // Hardcoded committer
+    const committerEmail = "john.doe@example.com"; // Hardcoded email
+    const timestamp = Math.floor(Date.now() / 1000); // Current Unix timestamp
+
+    // Construct the commit header
+    const header = `tree ${treeSHA}\n` + 
+    (parentSHA ? `parent ${parentSHA}\n` : "") +
+    `author ${authorName} <${authorEmail}> ${timestamp} +0000\n` +
+    `committer ${committerName} <${committerEmail}> ${timestamp} +00000\n`;
+
+    // Creat the commit content (header + message)
+    const commitContent = Buffer.from(header + "\n" + message);
+
+    // Write the commit object
+    const commitSHA = writeObject("commit", commitContent);
+
+    console.log(commitSHA);
 }
